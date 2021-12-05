@@ -15,6 +15,7 @@
 #define VacPVfactor 0.47659557F //fattore di conversione grandezza
 #define AacPVfactor 0.002356949F //fattore di conversione grandezza
 #define RMSfactor 0.707106781186547524400F //1 su radice di 2
+#define PID_PERIOD 2000UL // periodo di aggiornamento del PID in millisecondi
 
 //dichiarazione variabili globali
 int PotSPValue = 0; // valore del potenziometro per il controllo del Set Point di temperatura
@@ -30,13 +31,19 @@ float PressPV = 0.0; //Process Value di pressione
 float HumidityPV = 0.0; //Process Value di pressione
 float kiFactor = 0.5F; //fattore integrativo del controllo
 int SmokePV = 0; //Process Value di presenza fumo
-int SmokeTH = 10000; //Soglia di allarme presenza fumo
-int FanInCtrlValue = 0; //per uscita PWM
-int FanOutCtrlValue = 0; //per uscita PWM
+int SmokeUpperLimit = 10000; //Soglia di allarme presenza fumo
+int FanCtrlValue = 0; //per uscita PWM
 bool BottonMode = true; //bottone selezione modo ventole
 bool Alarm = false; //stato di allarme grave
+static unsigned long PreviousPIDTime = 0; //timestamp per creare un evento periodico necessario al PID
 
-
+//emun
+enum StateMachine{
+    AUTOMATICO,
+    MANUALE,
+    STOP,
+};
+StateMachine Status = AUTOMATICO;
 
 //prototipi di funzione
 void getPV(void);
@@ -47,5 +54,5 @@ void printDisplayFAN(int);
 void settingProcedure(void);
 void EEPROMWriteFloat(int, float);
 float EEPROMReadFloat(int);
-
+bool risingDetect(bool);
 #endif

@@ -54,40 +54,82 @@ void setup() {
   pinMode(BottonModePin, INPUT);
   //setup digital output
   pinMode(FanInCtrlPin, OUTPUT);
-  digitalWrite(FanInCtrlPin,HIGH);
+  analogWrite(FanInCtrlPin,0);
   pinMode(FanOutCtrlPin, OUTPUT);
-  digitalWrite(FanOutCtrlPin,HIGH);
+  analogWrite(FanOutCtrlPin,0);
   pinMode(AlarmPin, OUTPUT);
   digitalWrite(AlarmPin,HIGH);
 
   //recupero parametri di processo precedentemente impostati e scritti sulla EEPROM
   EEPROM.get(0, kiFactor);
-  EEPROM.get(4, SmokeTH);
+  EEPROM.get(4, SmokeUpperLimit);
+  Status = AUTOMATICO;
 
   //inizializzazione porta seriale
   Serial.begin(9600);
 }
 
 void loop() {
-  
+
   if (Serial.available() > 0) {
-    settingProcedure(); //eventuale impostazioni parametri da seriale
+    //settingProcedure(); //eventuale impostazioni parametri da seriale
   }
-  getPV(); //raccolta dati
-  Alarm = (SmokePV < SmokeTH) ? false : true; //dà l'allarme se il sensore rilevamento fumo supera la soglia
+  getPV(); //raccolta dati dal campo
+  Alarm = (SmokePV < SmokeUpperLimit) ? false : true; //dà l'allarme se il sensore rilevamento fumo supera la soglia
   alarmSequence(Alarm);
-  int PWMvalue = 0;
-  if(BottonMode){
-    PWMvalue = controlIntegrator(TempSP, TempPV, kiFactor*(-1)); //ki negativo = raffreddamento
+
+  //Macchina a stati
+  switch (Status)
+  {
+  case AUTOMATICO:
+    if (risingDetect(BottonMode)) //cambio di stato ogni volta che premo il pulsante
+    {
+      FanCtrlValue = 0;
+      analogWrite(FanInCtrlPin, FanCtrlValue);
+      analogWrite(FanOutCtrlPin, FanCtrlValue);      
+      Status = MANUALE;
+      break;
+    }
+    if ( (millis() - PreviousPIDTime) >= PID_PERIOD)
+    {
+      FanCtrlValue = controlIntegrator(TempSP, TempPV, kiFactor*(-1)); //ki negativo = raffreddamento
+      analogWrite(FanInCtrlPin, FanCtrlValue);
+      analogWrite(FanOutCtrlPin, FanCtrlValue);
+      PreviousPIDTime = millis();
+    }
+    break;
+
+  case MANUALE:
+    if (risingDetect(BottonMode)) //cambio di stato ogni volta che premo il pulsante
+    { 
+      FanCtrlValue = 0;
+      analogWrite(FanInCtrlPin, FanCtrlValue);
+      analogWrite(FanOutCtrlPin, FanCtrlValue);
+      Status = STOP;
+      break;
+    }
+    FanCtrlValue = map(PotSPValue,0,1023,0,255);
+    analogWrite(FanInCtrlPin, FanCtrlValue);
+    analogWrite(FanOutCtrlPin, FanCtrlValue);
+    break;
+
+  case STOP:
+    if (risingDetect(BottonMode)) //cambio di stato ogni volta che premo il pulsante
+    {
+      Status = AUTOMATICO;
+      break;
+    }
+    break;
+
+  default:
+    break;
   }
-  else{
-    PWMvalue = map(PotSPValue,0,1023,0,255);
-  }
-  analogWrite(FanInCtrlPin, PWMvalue);
-  analogWrite(FanOutCtrlPin, PWMvalue);
+  
+
   printDisplayPV();
-  printDisplayFAN(PWMvalue);
-  //delay(5);
+  printDisplayFAN(FanCtrlValue);
+  
+  delay(1);
   
 }
 
@@ -110,7 +152,7 @@ void getPV() {
   
   //da pannello frontale
   PotSPValue = analogRead(PotSPPin);
-  if (digitalRead(BottonModePin)){ BottonMode = !BottonMode; }
+  BottonMode = digitalRead(BottonModePin);
   
   //sensori interni alla cabina di stampa
   TempSP = map(PotSPValue,0,1023,20,60);
@@ -205,25 +247,39 @@ void printDisplayPV() {
 
 //imposta il display relativo alla visualizzazione del controllo delle ventole
 void printDisplayFAN(int FanLevel) {
-  int RectWidth = map(FanLevel,0,255,0,128);
+  static int RectWidth = 0;
+  RectWidth = map(FanLevel,0,255,0,128);
 
   DisplayFAN.clearDisplay();
   DisplayFAN.setTextSize(1);
   DisplayFAN.setCursor(0,0);
   DisplayFAN.print("Mode: ");
-  if (BottonMode){
+  switch (Status)
+  {
+  case AUTOMATICO:
     DisplayFAN.println("Auto");
     DisplayFAN.setTextSize(2);
     DisplayFAN.print("SP:");
     DisplayFAN.print(round(TempSP));
     DisplayFAN.println("C");
-  }
-  else{
+    break;
+  
+  case MANUALE:
     DisplayFAN.println("Manual");
     DisplayFAN.setTextSize(2);
     DisplayFAN.print("Speed:");
     DisplayFAN.print(round(map(FanLevel,0,255,0,100)));
     DisplayFAN.println("%");
+    break;
+
+  case STOP:
+    DisplayFAN.println("");
+    DisplayFAN.setTextSize(2);
+    DisplayFAN.println("STOP");
+    break;
+
+  default:
+    break;
   }
   DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
   DisplayFAN.display();
@@ -250,16 +306,32 @@ void settingProcedure(){
 */
   if (receivedString.startsWith("SetSK")) {
     receivedString.remove(0,5);
-    SmokeTH = receivedString.toInt();
-    EEPROM.put(4, SmokeTH);
+    SmokeUpperLimit = receivedString.toInt();
+    EEPROM.put(4, SmokeUpperLimit);
     Serial.print("Smoke TH now is: ");
-    Serial.println(SmokeTH);
+    Serial.println(SmokeUpperLimit);
   }
 /*
   if (receivedString.startsWith("GetSK")) {
     Serial.print("Smoke TH is: ");
-    Serial.println(SmokeTH);
+    Serial.println(SmokeUpperLimit);
   }
 */
   Serial.flush();
+}
+
+
+//funzione per controlare se un parametro booleano è passato da 0 a 1 rispetto alla chiamata precedente
+bool risingDetect(bool parametro){
+  static bool parametro_previus = false;
+  if ( (parametro_previus == false) && (parametro == true) )
+  {
+    parametro_previus = parametro;
+    return true;
+  }
+  else //if ((parametro_previus == true) && (parametro == false) || (parametro_previus == parametro) )
+  {
+    parametro_previus = parametro;
+    return false;
+  }
 }
