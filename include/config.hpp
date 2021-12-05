@@ -1,7 +1,8 @@
-#ifndef Definizioni
-#define Definizioni
+#ifndef config_hpp
+#define config_hpp
 
 #include <Arduino.h>
+
 
 //dichiarazione costanti
 #define BottonModePin 2 //pin di ingresso del bottone per la selzione del modo delle ventole
@@ -49,10 +50,14 @@ StateMachine Status = AUTOMATICO;
 void getPV(void);
 void alarmSequence(bool);
 int controlIntegrator(float, float, float);
-void printDisplayPV();
-void printDisplayFAN(int);
 void settingProcedure(void);
 void EEPROMWriteFloat(int, float);
 float EEPROMReadFloat(int);
 bool risingDetect(bool);
+void add_serial_commands(void);
+void unrecognized(const char);
+void setKI(void);
+void getKI(void);
+void setSK(void);
+void getSK(void);
 #endif

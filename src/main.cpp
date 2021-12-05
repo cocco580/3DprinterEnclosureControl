@@ -1,47 +1,30 @@
+
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-#include "definizioni.h"
+#include <SerialCommand.h>
+
+#include "config.hpp"
+#include "display.hpp"
 
 //dichiarazione oggetti
-Adafruit_SSD1306 DisplayPV(PIN_WIRE_SDA);
-Adafruit_SSD1306 DisplayFAN(PIN_WIRE_SDA);
 Adafruit_BME280 bme;
+SerialCommand Serial_cmd;
 
 
 void setup() {
-  // Test display PV (128x64px)
-  DisplayPV.begin(SSD1306_SWITCHCAPVCC,0x3C); //indirizzo del primo display
-  DisplayPV.clearDisplay();
-  DisplayPV.setTextColor(WHITE);
-  /* DisplayPV.setTextSize(2);
-  DisplayPV.setCursor(0,0);
-  DisplayPV.println("Test OLED PV");
-  DisplayPV.display();
+
+  //avvio dei display
+  beginDisplayPV();
   delay(1000);
-  DisplayPV.clearDisplay();
-  DisplayPV.fillRect(0,0,128,63,WHITE); */
-  DisplayPV.display();
+  beginDisplayFAN();
   delay(1000);
 
-  // Test display FAN (128x64)
-  DisplayFAN.begin(SSD1306_SWITCHCAPVCC,0x3D); //indirizzo del secondo display
-  DisplayFAN.clearDisplay();
-  DisplayFAN.setTextColor(WHITE);
-  /* DisplayFAN.setTextSize(2);
-  DisplayFAN.setCursor(0,0);
-  DisplayFAN.println("Test OLED FAN");
-  DisplayFAN.display();
-  delay(1000);
-  DisplayFAN.clearDisplay();
-  DisplayFAN.fillRect(0,0,128,63,WHITE); */
-  DisplayFAN.display();
-  delay(1000);
+  // Setup callbacks for SerialCommand commands
+  add_serial_commands();
   
   //inizializzaione BME280
   bme.begin(0x76);
@@ -63,18 +46,19 @@ void setup() {
   //recupero parametri di processo precedentemente impostati e scritti sulla EEPROM
   EEPROM.get(0, kiFactor);
   EEPROM.get(4, SmokeUpperLimit);
-  Status = AUTOMATICO;
-
+  
   //inizializzazione porta seriale
   Serial.begin(9600);
+  Serial.println("Setup completato");
+  Status = AUTOMATICO;
+  Serial.println("Stato macchina: Automatico");
 }
 
 void loop() {
 
-  if (Serial.available() > 0) {
-    //settingProcedure(); //eventuale impostazioni parametri da seriale
-  }
+  //Serial_cmd.readSerial();
   getPV(); //raccolta dati dal campo
+  printDisplayPV(TempPV, HumidityPV, SmokePV, VacPV, AacPV, ACinstantPWR, ACenergy); //print del display dei valori di processo
   Alarm = (SmokePV < SmokeUpperLimit) ? false : true; //dà l'allarme se il sensore rilevamento fumo supera la soglia
   alarmSequence(Alarm);
 
@@ -88,6 +72,7 @@ void loop() {
       analogWrite(FanInCtrlPin, FanCtrlValue);
       analogWrite(FanOutCtrlPin, FanCtrlValue);      
       Status = MANUALE;
+      Serial.println("Stato macchina: Manuale");
       break;
     }
     if ( (millis() - PreviousPIDTime) >= PID_PERIOD)
@@ -97,6 +82,7 @@ void loop() {
       analogWrite(FanOutCtrlPin, FanCtrlValue);
       PreviousPIDTime = millis();
     }
+    printDisplayFAN_AUTO(TempSP, FanCtrlValue); //print del display ventole in automatico
     break;
 
   case MANUALE:
@@ -106,29 +92,28 @@ void loop() {
       analogWrite(FanInCtrlPin, FanCtrlValue);
       analogWrite(FanOutCtrlPin, FanCtrlValue);
       Status = STOP;
+      Serial.println("Stato macchina: Stop");
       break;
     }
     FanCtrlValue = map(PotSPValue,0,1023,0,255);
     analogWrite(FanInCtrlPin, FanCtrlValue);
     analogWrite(FanOutCtrlPin, FanCtrlValue);
+    printDisplayFAN_MAN(FanCtrlValue);
     break;
 
   case STOP:
     if (risingDetect(BottonMode)) //cambio di stato ogni volta che premo il pulsante
     {
       Status = AUTOMATICO;
+      Serial.println("Stato macchina: Automatico");
       break;
     }
+    printDisplayFAN_STOP();
     break;
 
   default:
     break;
   }
-  
-
-  printDisplayPV();
-  printDisplayFAN(FanCtrlValue);
-  
   delay(1);
   
 }
@@ -210,81 +195,8 @@ int controlIntegrator(float Command, float Feedback, float ki) {
   return (int) Out;
 }
 
-//imposta il display relativo alla visualizzazione dei process value
-void printDisplayPV() {
-  DisplayPV.clearDisplay();
-  DisplayPV.setTextSize(2);
-  DisplayPV.setCursor(0,0);
-  DisplayPV.print("T:");
-  DisplayPV.print(round(TempPV));
-  DisplayPV.println("C");
-  DisplayPV.setTextSize(1);
-  DisplayPV.print("H:");
-  DisplayPV.print(round(HumidityPV));
-  DisplayPV.println("%");
-  DisplayPV.print("Smk:");
-  DisplayPV.print(round(SmokePV));
-  //DisplayPV.println("ppm");
-  DisplayPV.setTextSize(1);
-  DisplayPV.setCursor(64,0);
-  DisplayPV.print("Vac:");
-  DisplayPV.print(round(VacPV));
-  DisplayPV.println("V");
-  DisplayPV.setCursor(64,8);
-  DisplayPV.print("Aac:");
-  DisplayPV.print(AacPV,2);
-  DisplayPV.println("A");
-  DisplayPV.setCursor(64,16);
-  DisplayPV.print("PWR:");
-  DisplayPV.print(round(ACinstantPWR));
-  DisplayPV.println("kW");
-  DisplayPV.setCursor(64,24);
-  DisplayPV.print("ERG:");
-  DisplayPV.print(round(ACenergy));
-  DisplayPV.println("kWh");
-  DisplayPV.display();
-}
 
-//imposta il display relativo alla visualizzazione del controllo delle ventole
-void printDisplayFAN(int FanLevel) {
-  static int RectWidth = 0;
-  RectWidth = map(FanLevel,0,255,0,128);
-
-  DisplayFAN.clearDisplay();
-  DisplayFAN.setTextSize(1);
-  DisplayFAN.setCursor(0,0);
-  DisplayFAN.print("Mode: ");
-  switch (Status)
-  {
-  case AUTOMATICO:
-    DisplayFAN.println("Auto");
-    DisplayFAN.setTextSize(2);
-    DisplayFAN.print("SP:");
-    DisplayFAN.print(round(TempSP));
-    DisplayFAN.println("C");
-    break;
-  
-  case MANUALE:
-    DisplayFAN.println("Manual");
-    DisplayFAN.setTextSize(2);
-    DisplayFAN.print("Speed:");
-    DisplayFAN.print(round(map(FanLevel,0,255,0,100)));
-    DisplayFAN.println("%");
-    break;
-
-  case STOP:
-    DisplayFAN.println("");
-    DisplayFAN.setTextSize(2);
-    DisplayFAN.println("STOP");
-    break;
-
-  default:
-    break;
-  }
-  DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
-  DisplayFAN.display();
-}
-
+/*
 void settingProcedure(){
 
   String receivedString;
@@ -298,12 +210,12 @@ void settingProcedure(){
     Serial.print("ki factor now is: ");
     Serial.println(kiFactor);
   }
-/*
+
   if (receivedString.startsWith("GetKI")) {
     Serial.print("ki factor is: ");
     Serial.println(kiFactor);
   }
-*/
+
   if (receivedString.startsWith("SetSK")) {
     receivedString.remove(0,5);
     SmokeUpperLimit = receivedString.toInt();
@@ -311,15 +223,15 @@ void settingProcedure(){
     Serial.print("Smoke TH now is: ");
     Serial.println(SmokeUpperLimit);
   }
-/*
+
   if (receivedString.startsWith("GetSK")) {
     Serial.print("Smoke TH is: ");
     Serial.println(SmokeUpperLimit);
   }
-*/
+
   Serial.flush();
 }
-
+*/
 
 //funzione per controlare se un parametro booleano è passato da 0 a 1 rispetto alla chiamata precedente
 bool risingDetect(bool parametro){
@@ -334,4 +246,39 @@ bool risingDetect(bool parametro){
     parametro_previus = parametro;
     return false;
   }
+}
+
+
+void add_serial_commands()
+{
+  Serial_cmd.addCommand("SetKI", setKI);
+  Serial_cmd.addCommand("GetKI", getKI);
+  Serial_cmd.addCommand("SetSK", setSK);
+  Serial_cmd.addCommand("GetSK", getSK);
+  //Serial_cmd.setDefaultHandler(unrecognized);
+}
+
+void unrecognized(const char *command)
+{
+  Serial.println("Invalid cmd");
+}
+
+void setKI()
+{
+
+}
+
+void getKI()
+{
+
+}
+
+void setSK()
+{
+
+}
+
+void getSK()
+{
+
 }
