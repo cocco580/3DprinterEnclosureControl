@@ -1,30 +1,66 @@
 
 #include <Arduino.h>
 #include <EEPROM.h>
-#include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-#include <SerialCommand.h>
-
+//#include <SerialCommand.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "config.hpp"
-#include "display.hpp"
+
 
 //dichiarazione oggetti
 Adafruit_BME280 bme;
-SerialCommand Serial_cmd;
+//SerialCommand Serial_cmd;
+Adafruit_SSD1306 DisplayPV(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 DisplayFAN(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 
 void setup() {
+  //inizializzazione porta seriale
+  Serial.begin(9600);
 
   //avvio dei display
-  beginDisplayPV();
+  //beginDisplayPV();
+  if(!DisplayPV.begin(SSD1306_SWITCHCAPVCC,0x3C)) {
+    Serial.println(F("Begin display PV failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+  DisplayPV.clearDisplay();
+  DisplayPV.setTextColor(WHITE);
+  DisplayPV.setTextSize(2);
+  DisplayPV.setCursor(0,0);
+  DisplayPV.println("Test OLED PV");
+  DisplayPV.display();
   delay(1000);
-  beginDisplayFAN();
+  DisplayPV.clearDisplay();
+  DisplayPV.fillRect(0,0,128,63,WHITE);
+  DisplayPV.display();
+  Serial.println("Begin display PV");
+  delay(1000);
+  
+  //beginDisplayFAN();
+  if(!DisplayFAN.begin(SSD1306_SWITCHCAPVCC,0x3D)) {
+    Serial.println(F("Begin display FAN failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+  DisplayFAN.clearDisplay();
+  DisplayFAN.setTextColor(WHITE);
+  DisplayFAN.setTextSize(2);
+  DisplayFAN.setCursor(0,0);
+  DisplayFAN.println("Test OLED FAN");
+  DisplayFAN.display();
+  delay(1000);
+  DisplayFAN.clearDisplay();
+  DisplayFAN.fillRect(0,0,128,63,WHITE);
+  DisplayFAN.display();
+  Serial.println("Begin display FAN");
   delay(1000);
 
   // Setup callbacks for SerialCommand commands
-  add_serial_commands();
+  //add_serial_commands();
+  //Serial_cmd.setDefaultHandler(unrecognized);
   
   //inizializzaione BME280
   bme.begin(0x76);
@@ -47,8 +83,7 @@ void setup() {
   EEPROM.get(0, kiFactor);
   EEPROM.get(4, SmokeUpperLimit);
   
-  //inizializzazione porta seriale
-  Serial.begin(9600);
+
   Serial.println("Setup completato");
   Status = AUTOMATICO;
   Serial.println("Stato macchina: Automatico");
@@ -95,10 +130,15 @@ void loop() {
       Serial.println("Stato macchina: Stop");
       break;
     }
-    FanCtrlValue = map(PotSPValue,0,1023,0,255);
-    analogWrite(FanInCtrlPin, FanCtrlValue);
-    analogWrite(FanOutCtrlPin, FanCtrlValue);
-    printDisplayFAN_MAN(FanCtrlValue);
+    static int previus_FanCtrlValue = 0;
+    if (FanCtrlValue != previus_FanCtrlValue) // eseguo solo se il valore cambia
+    {
+      FanCtrlValue = map(PotSPValue,0,1023,0,255);
+      analogWrite(FanInCtrlPin, FanCtrlValue);
+      analogWrite(FanOutCtrlPin, FanCtrlValue);
+      printDisplayFAN_MAN(FanCtrlValue);
+      previus_FanCtrlValue = FanCtrlValue;
+    }
     break;
 
   case STOP:
@@ -249,19 +289,7 @@ bool risingDetect(bool parametro){
 }
 
 
-void add_serial_commands()
-{
-  Serial_cmd.addCommand("SetKI", setKI);
-  Serial_cmd.addCommand("GetKI", getKI);
-  Serial_cmd.addCommand("SetSK", setSK);
-  Serial_cmd.addCommand("GetSK", getSK);
-  //Serial_cmd.setDefaultHandler(unrecognized);
-}
-
-void unrecognized(const char *command)
-{
-  Serial.println("Invalid cmd");
-}
+/*
 
 void setKI()
 {
@@ -281,4 +309,140 @@ void setSK()
 void getSK()
 {
 
+}
+
+void add_serial_commands()
+{
+  Serial_cmd.addCommand("SetKI", setKI);
+  Serial_cmd.addCommand("GetKI", getKI);
+  Serial_cmd.addCommand("SetSK", setSK);
+  Serial_cmd.addCommand("GetSK", getSK);
+  
+}
+
+void unrecognized(const char *command)
+{
+  Serial.println("Invalid cmd");
+}
+
+*/
+void beginDisplayPV()
+{
+  //DisplayPV.begin(SSD1306_SWITCHCAPVCC,0x3C); //indirizzo del primo display
+  DisplayPV.clearDisplay();
+  DisplayPV.setTextColor(WHITE);
+  DisplayPV.setTextSize(2);
+  DisplayPV.setCursor(0,0);
+  DisplayPV.println("Test OLED PV");
+  DisplayPV.display();
+  delay(1000);
+  DisplayPV.clearDisplay();
+  DisplayPV.fillRect(0,0,128,63,WHITE);
+  DisplayPV.display();
+}
+
+// Test display FAN (128x64)
+void beginDisplayFAN()
+{
+  //DisplayFAN.begin(SSD1306_SWITCHCAPVCC,0x3D); //indirizzo del secondo display
+  DisplayFAN.clearDisplay();
+  DisplayFAN.setTextColor(WHITE);
+  DisplayFAN.setTextSize(2);
+  DisplayFAN.setCursor(0,0);
+  DisplayFAN.println("Test OLED FAN");
+  DisplayFAN.display();
+  delay(1000);
+  DisplayFAN.clearDisplay();
+  DisplayFAN.fillRect(0,0,128,63,WHITE);
+  DisplayFAN.display();
+}
+
+//imposta il display relativo alla visualizzazione dei process value
+void printDisplayPV(float temperatura, float umidita, int fumo, float tensioneAC, float correnteAC, float potenzaIstantanea, float energia)
+{
+  DisplayPV.clearDisplay();
+  DisplayPV.setTextSize(2);
+  DisplayPV.setCursor(0,0);
+  DisplayPV.print("T:");
+  DisplayPV.print(round(temperatura));
+  DisplayPV.println("C");
+  DisplayPV.setTextSize(1);
+  DisplayPV.print("H:");
+  DisplayPV.print(round(umidita));
+  DisplayPV.println("%");
+  DisplayPV.print("Smk:");
+  DisplayPV.print(round(fumo));
+  //DisplayPV.println("ppm");
+  DisplayPV.setTextSize(1);
+  DisplayPV.setCursor(64,0);
+  DisplayPV.print("Vac:");
+  DisplayPV.print(round(tensioneAC));
+  DisplayPV.println("V");
+  DisplayPV.setCursor(64,8);
+  DisplayPV.print("Aac:");
+  DisplayPV.print(correnteAC,2);
+  DisplayPV.println("A");
+  DisplayPV.setCursor(64,16);
+  DisplayPV.print("PWR:");
+  DisplayPV.print(round(potenzaIstantanea));
+  DisplayPV.println("kW");
+  DisplayPV.setCursor(64,24);
+  DisplayPV.print("ERG:");
+  DisplayPV.print(round(energia));
+  DisplayPV.println("kWh");
+  DisplayPV.display();
+}
+
+//imposta il display relativo alla visualizzazione del controllo delle ventole in Automatico
+void printDisplayFAN_AUTO(float temperatura, int FanLevel)
+{
+  static int RectWidth = 0;
+  RectWidth = map(FanLevel,0,255,0,128);
+
+  DisplayFAN.clearDisplay();
+  DisplayFAN.setTextSize(1);
+  DisplayFAN.setCursor(0,0);
+  DisplayFAN.print("Mode: ");
+  DisplayFAN.println("Auto");
+  DisplayFAN.setTextSize(2);
+  DisplayFAN.print("SP:");
+  DisplayFAN.print(round(temperatura));
+  DisplayFAN.println("C");
+  DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
+  DisplayFAN.display();
+}
+
+//imposta il display relativo alla visualizzazione del controllo delle ventole in Manuale
+void printDisplayFAN_MAN(int FanLevel)
+{
+  static int RectWidth = 0;
+  RectWidth = map(FanLevel,0,255,0,128);
+
+  DisplayFAN.clearDisplay();
+  DisplayFAN.setTextSize(1);
+  DisplayFAN.setCursor(0,0);
+  DisplayFAN.print("Mode: ");
+  DisplayFAN.println("Manual");
+  DisplayFAN.setTextSize(2);
+  DisplayFAN.print("Speed:");
+  DisplayFAN.print(round(map(FanLevel,0,255,0,100)));
+  DisplayFAN.println("%");
+  DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
+  DisplayFAN.display();
+}
+
+//imposta il display relativo alla visualizzazione del controllo delle ventole in Stop
+void printDisplayFAN_STOP()
+{
+  //static int RectWidth = 0;
+  //RectWidth = map(FanLevel,0,255,0,128);
+
+  DisplayFAN.clearDisplay();
+  DisplayFAN.setTextSize(1);
+  DisplayFAN.setCursor(0,0);
+  DisplayFAN.println("Mode: ");
+  DisplayFAN.setTextSize(2);
+  DisplayFAN.println("STOP");
+  //DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
+  DisplayFAN.display();
 }

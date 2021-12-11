@@ -17,6 +17,9 @@
 #define AacPVfactor 0.002356949F //fattore di conversione grandezza
 #define RMSfactor 0.707106781186547524400F //1 su radice di 2
 #define PID_PERIOD 2000UL // periodo di aggiornamento del PID in millisecondi
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define OLED_RESET 4 // Reset pin # (or -1 if sharing Arduino reset pin)
 
 //dichiarazione variabili globali
 int PotSPValue = 0; // valore del potenziometro per il controllo del Set Point di temperatura
@@ -54,10 +57,17 @@ void settingProcedure(void);
 void EEPROMWriteFloat(int, float);
 float EEPROMReadFloat(int);
 bool risingDetect(bool);
-void add_serial_commands(void);
-void unrecognized(const char);
-void setKI(void);
-void getKI(void);
-void setSK(void);
-void getSK(void);
+//void add_serial_commands(void);
+//void unrecognized(const char *command);
+//void setKI(void);
+//void getKI(void);
+//void setSK(void);
+//void getSK(void);
+
+void beginDisplayPV(void);
+void printDisplayPV(float, float, int, float, float, float, float);
+void beginDisplayFAN(void);
+void printDisplayFAN_AUTO(float, int);
+void printDisplayFAN_MAN(int);
+void printDisplayFAN_STOP(void);
 #endif
