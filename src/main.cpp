@@ -22,41 +22,8 @@ void setup() {
   Serial.begin(9600);
 
   //avvio dei display
-  //beginDisplayPV();
-  if(!DisplayPV.begin(SSD1306_SWITCHCAPVCC,0x3C)) {
-    Serial.println(F("Begin display PV failed"));
-    for(;;); // Don't proceed, loop forever
-  }
-  DisplayPV.clearDisplay();
-  DisplayPV.setTextColor(WHITE);
-  DisplayPV.setTextSize(2);
-  DisplayPV.setCursor(0,0);
-  DisplayPV.println("Test OLED PV");
-  DisplayPV.display();
-  delay(1000);
-  DisplayPV.clearDisplay();
-  DisplayPV.fillRect(0,0,128,63,WHITE);
-  DisplayPV.display();
-  Serial.println("Begin display PV");
-  delay(1000);
-  
-  //beginDisplayFAN();
-  if(!DisplayFAN.begin(SSD1306_SWITCHCAPVCC,0x3D)) {
-    Serial.println(F("Begin display FAN failed"));
-    for(;;); // Don't proceed, loop forever
-  }
-  DisplayFAN.clearDisplay();
-  DisplayFAN.setTextColor(WHITE);
-  DisplayFAN.setTextSize(2);
-  DisplayFAN.setCursor(0,0);
-  DisplayFAN.println("Test OLED FAN");
-  DisplayFAN.display();
-  delay(1000);
-  DisplayFAN.clearDisplay();
-  DisplayFAN.fillRect(0,0,128,63,WHITE);
-  DisplayFAN.display();
-  Serial.println("Begin display FAN");
-  delay(1000);
+  beginDisplayPV();
+  beginDisplayFAN();
 
   // Setup callbacks for SerialCommand commands
   //add_serial_commands();
@@ -115,6 +82,12 @@ void loop() {
       FanCtrlValue = controlIntegrator(TempSP, TempPV, kiFactor*(-1)); //ki negativo = raffreddamento
       analogWrite(FanInCtrlPin, FanCtrlValue);
       analogWrite(FanOutCtrlPin, FanCtrlValue);
+      Serial.print("PV: ");
+      Serial.print(TempPV,1);
+      Serial.print(" | SP: ");
+      Serial.print(TempSP,1);
+      Serial.print(" | Out: ");
+      Serial.println(FanCtrlValue);
       PreviousPIDTime = millis();
     }
     printDisplayFAN_AUTO(TempSP, FanCtrlValue); //print del display ventole in automatico
@@ -131,9 +104,9 @@ void loop() {
       break;
     }
     static int previus_FanCtrlValue = 0;
+    FanCtrlValue = map(PotSPValue,0,1023,0,255);
     if (FanCtrlValue != previus_FanCtrlValue) // eseguo solo se il valore cambia
     {
-      FanCtrlValue = map(PotSPValue,0,1023,0,255);
       analogWrite(FanInCtrlPin, FanCtrlValue);
       analogWrite(FanOutCtrlPin, FanCtrlValue);
       printDisplayFAN_MAN(FanCtrlValue);
@@ -327,8 +300,11 @@ void unrecognized(const char *command)
 
 */
 void beginDisplayPV()
-{
-  //DisplayPV.begin(SSD1306_SWITCHCAPVCC,0x3C); //indirizzo del primo display
+{/* 
+  if(!DisplayPV.begin(SSD1306_SWITCHCAPVCC,0x3C)) {
+    Serial.println(F("Begin display PV failed"));
+    for(;;); // Don't proceed, loop forever
+  }
   DisplayPV.clearDisplay();
   DisplayPV.setTextColor(WHITE);
   DisplayPV.setTextSize(2);
@@ -339,12 +315,17 @@ void beginDisplayPV()
   DisplayPV.clearDisplay();
   DisplayPV.fillRect(0,0,128,63,WHITE);
   DisplayPV.display();
+  Serial.println("Begin display PV");
+  delay(1000); */
 }
 
 // Test display FAN (128x64)
 void beginDisplayFAN()
-{
-  //DisplayFAN.begin(SSD1306_SWITCHCAPVCC,0x3D); //indirizzo del secondo display
+{/* 
+  if(!DisplayFAN.begin(SSD1306_SWITCHCAPVCC,0x3D)) {
+    Serial.println(F("Begin display FAN failed"));
+    for(;;); // Don't proceed, loop forever
+  }
   DisplayFAN.clearDisplay();
   DisplayFAN.setTextColor(WHITE);
   DisplayFAN.setTextSize(2);
@@ -355,11 +336,13 @@ void beginDisplayFAN()
   DisplayFAN.clearDisplay();
   DisplayFAN.fillRect(0,0,128,63,WHITE);
   DisplayFAN.display();
+  Serial.println("Begin display FAN");
+  delay(1000); */
 }
 
 //imposta il display relativo alla visualizzazione dei process value
 void printDisplayPV(float temperatura, float umidita, int fumo, float tensioneAC, float correnteAC, float potenzaIstantanea, float energia)
-{
+{/* 
   DisplayPV.clearDisplay();
   DisplayPV.setTextSize(2);
   DisplayPV.setCursor(0,0);
@@ -390,12 +373,12 @@ void printDisplayPV(float temperatura, float umidita, int fumo, float tensioneAC
   DisplayPV.print("ERG:");
   DisplayPV.print(round(energia));
   DisplayPV.println("kWh");
-  DisplayPV.display();
+  DisplayPV.display(); */
 }
 
 //imposta il display relativo alla visualizzazione del controllo delle ventole in Automatico
 void printDisplayFAN_AUTO(float temperatura, int FanLevel)
-{
+{/* 
   static int RectWidth = 0;
   RectWidth = map(FanLevel,0,255,0,128);
 
@@ -409,12 +392,12 @@ void printDisplayFAN_AUTO(float temperatura, int FanLevel)
   DisplayFAN.print(round(temperatura));
   DisplayFAN.println("C");
   DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
-  DisplayFAN.display();
+  DisplayFAN.display(); */
 }
 
 //imposta il display relativo alla visualizzazione del controllo delle ventole in Manuale
 void printDisplayFAN_MAN(int FanLevel)
-{
+{/* 
   static int RectWidth = 0;
   RectWidth = map(FanLevel,0,255,0,128);
 
@@ -428,12 +411,12 @@ void printDisplayFAN_MAN(int FanLevel)
   DisplayFAN.print(round(map(FanLevel,0,255,0,100)));
   DisplayFAN.println("%");
   DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
-  DisplayFAN.display();
+  DisplayFAN.display(); */
 }
 
 //imposta il display relativo alla visualizzazione del controllo delle ventole in Stop
 void printDisplayFAN_STOP()
-{
+{/* 
   //static int RectWidth = 0;
   //RectWidth = map(FanLevel,0,255,0,128);
 
@@ -444,5 +427,5 @@ void printDisplayFAN_STOP()
   DisplayFAN.setTextSize(2);
   DisplayFAN.println("STOP");
   //DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
-  DisplayFAN.display();
+  DisplayFAN.display(); */
 }
