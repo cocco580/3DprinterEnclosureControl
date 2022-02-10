@@ -5,25 +5,21 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 //#include <SerialCommand.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 #include "config.hpp"
+#include "TFT.hpp"
 
 
 //dichiarazione oggetti
 Adafruit_BME280 bme;
 //SerialCommand Serial_cmd;
-Adafruit_SSD1306 DisplayPV(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-Adafruit_SSD1306 DisplayFAN(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 
 void setup() {
   //inizializzazione porta seriale
-  Serial.begin(9600);
+  Serial.begin(115200);
 
-  //avvio dei display
-  beginDisplayPV();
-  beginDisplayFAN();
+  //avvio del display
+  TFT_StaticLayout();
 
   // Setup callbacks for SerialCommand commands
   //add_serial_commands();
@@ -37,7 +33,8 @@ void setup() {
   pinMode(VacPVPin, INPUT);
   pinMode(AacPVPin, INPUT);
   //setup digital input
-  pinMode(BottonModePin, INPUT);
+  pinMode(ButtonModePin, INPUT);
+  attachInterrupt(digitalPinToInterrupt(ButtonModePin), ISR, RISING);
   //setup digital output
   pinMode(FanInCtrlPin, OUTPUT);
   analogWrite(FanInCtrlPin,0);
@@ -68,15 +65,6 @@ void loop() {
   switch (Status)
   {
   case AUTOMATICO:
-    if (risingDetect(BottonMode)) //cambio di stato ogni volta che premo il pulsante
-    {
-      FanCtrlValue = 0;
-      analogWrite(FanInCtrlPin, FanCtrlValue);
-      analogWrite(FanOutCtrlPin, FanCtrlValue);      
-      Status = MANUALE;
-      Serial.println("Stato macchina: Manuale");
-      break;
-    }
     if ( (millis() - PreviousPIDTime) >= PID_PERIOD)
     {
       FanCtrlValue = controlIntegrator(TempSP, TempPV, kiFactor*(-1)); //ki negativo = raffreddamento
@@ -94,15 +82,6 @@ void loop() {
     break;
 
   case MANUALE:
-    if (risingDetect(BottonMode)) //cambio di stato ogni volta che premo il pulsante
-    { 
-      FanCtrlValue = 0;
-      analogWrite(FanInCtrlPin, FanCtrlValue);
-      analogWrite(FanOutCtrlPin, FanCtrlValue);
-      Status = STOP;
-      Serial.println("Stato macchina: Stop");
-      break;
-    }
     static int previus_FanCtrlValue = 0;
     FanCtrlValue = map(PotSPValue,0,1023,0,255);
     if (FanCtrlValue != previus_FanCtrlValue) // eseguo solo se il valore cambia
@@ -115,20 +94,17 @@ void loop() {
     break;
 
   case STOP:
-    if (risingDetect(BottonMode)) //cambio di stato ogni volta che premo il pulsante
+    if (FanCtrlValue != 0)
     {
-      Status = AUTOMATICO;
-      Serial.println("Stato macchina: Automatico");
-      break;
+      FanCtrlValue = 0;
+      analogWrite(FanInCtrlPin, FanCtrlValue);
+      analogWrite(FanOutCtrlPin, FanCtrlValue);
     }
-    printDisplayFAN_STOP();
     break;
 
   default:
     break;
   }
-  delay(1);
-  
 }
 
 //sequenza di avvio e segnalazione allarme
@@ -142,6 +118,29 @@ void alarmSequence(bool StatoAllarme) {
   
 }
 
+
+//ISR bottone cambio modo di funzionamneto
+void ISRbuttomMode()
+{
+  switch (Status)
+  {
+  case AUTOMATICO:
+    Status = MANUALE;
+    Serial.println("Stato macchina: Manuale");
+    break;
+  case MANUALE:
+    Status = STOP;
+    Serial.println("Stato macchina: Stop");
+    break;
+  case STOP:
+    Status = AUTOMATICO;
+    Serial.println("Stato macchina: Automatico");
+    break;
+  default:
+    break;
+  }
+}
+
 //raccolta di tutti i dati provenienti dei sensori di campo
 void getPV() {
   //variabili
@@ -150,7 +149,7 @@ void getPV() {
   
   //da pannello frontale
   PotSPValue = analogRead(PotSPPin);
-  BottonMode = digitalRead(BottonModePin);
+  //ButtonMode = digitalRead(ButtonModePin);
   
   //sensori interni alla cabina di stampa
   TempSP = map(PotSPValue,0,1023,20,60);
@@ -247,7 +246,7 @@ void settingProcedure(){
 */
 
 //funzione per controlare se un parametro booleano è passato da 0 a 1 rispetto alla chiamata precedente
-bool risingDetect(bool parametro){
+bool ISRbuttomMode(bool parametro){
   static bool parametro_previus = false;
   if ( (parametro_previus == false) && (parametro == true) )
   {
@@ -299,133 +298,3 @@ void unrecognized(const char *command)
 }
 
 */
-void beginDisplayPV()
-{/* 
-  if(!DisplayPV.begin(SSD1306_SWITCHCAPVCC,0x3C)) {
-    Serial.println(F("Begin display PV failed"));
-    for(;;); // Don't proceed, loop forever
-  }
-  DisplayPV.clearDisplay();
-  DisplayPV.setTextColor(WHITE);
-  DisplayPV.setTextSize(2);
-  DisplayPV.setCursor(0,0);
-  DisplayPV.println("Test OLED PV");
-  DisplayPV.display();
-  delay(1000);
-  DisplayPV.clearDisplay();
-  DisplayPV.fillRect(0,0,128,63,WHITE);
-  DisplayPV.display();
-  Serial.println("Begin display PV");
-  delay(1000); */
-}
-
-// Test display FAN (128x64)
-void beginDisplayFAN()
-{/* 
-  if(!DisplayFAN.begin(SSD1306_SWITCHCAPVCC,0x3D)) {
-    Serial.println(F("Begin display FAN failed"));
-    for(;;); // Don't proceed, loop forever
-  }
-  DisplayFAN.clearDisplay();
-  DisplayFAN.setTextColor(WHITE);
-  DisplayFAN.setTextSize(2);
-  DisplayFAN.setCursor(0,0);
-  DisplayFAN.println("Test OLED FAN");
-  DisplayFAN.display();
-  delay(1000);
-  DisplayFAN.clearDisplay();
-  DisplayFAN.fillRect(0,0,128,63,WHITE);
-  DisplayFAN.display();
-  Serial.println("Begin display FAN");
-  delay(1000); */
-}
-
-//imposta il display relativo alla visualizzazione dei process value
-void printDisplayPV(float temperatura, float umidita, int fumo, float tensioneAC, float correnteAC, float potenzaIstantanea, float energia)
-{/* 
-  DisplayPV.clearDisplay();
-  DisplayPV.setTextSize(2);
-  DisplayPV.setCursor(0,0);
-  DisplayPV.print("T:");
-  DisplayPV.print(round(temperatura));
-  DisplayPV.println("C");
-  DisplayPV.setTextSize(1);
-  DisplayPV.print("H:");
-  DisplayPV.print(round(umidita));
-  DisplayPV.println("%");
-  DisplayPV.print("Smk:");
-  DisplayPV.print(round(fumo));
-  //DisplayPV.println("ppm");
-  DisplayPV.setTextSize(1);
-  DisplayPV.setCursor(64,0);
-  DisplayPV.print("Vac:");
-  DisplayPV.print(round(tensioneAC));
-  DisplayPV.println("V");
-  DisplayPV.setCursor(64,8);
-  DisplayPV.print("Aac:");
-  DisplayPV.print(correnteAC,2);
-  DisplayPV.println("A");
-  DisplayPV.setCursor(64,16);
-  DisplayPV.print("PWR:");
-  DisplayPV.print(round(potenzaIstantanea));
-  DisplayPV.println("kW");
-  DisplayPV.setCursor(64,24);
-  DisplayPV.print("ERG:");
-  DisplayPV.print(round(energia));
-  DisplayPV.println("kWh");
-  DisplayPV.display(); */
-}
-
-//imposta il display relativo alla visualizzazione del controllo delle ventole in Automatico
-void printDisplayFAN_AUTO(float temperatura, int FanLevel)
-{/* 
-  static int RectWidth = 0;
-  RectWidth = map(FanLevel,0,255,0,128);
-
-  DisplayFAN.clearDisplay();
-  DisplayFAN.setTextSize(1);
-  DisplayFAN.setCursor(0,0);
-  DisplayFAN.print("Mode: ");
-  DisplayFAN.println("Auto");
-  DisplayFAN.setTextSize(2);
-  DisplayFAN.print("SP:");
-  DisplayFAN.print(round(temperatura));
-  DisplayFAN.println("C");
-  DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
-  DisplayFAN.display(); */
-}
-
-//imposta il display relativo alla visualizzazione del controllo delle ventole in Manuale
-void printDisplayFAN_MAN(int FanLevel)
-{/* 
-  static int RectWidth = 0;
-  RectWidth = map(FanLevel,0,255,0,128);
-
-  DisplayFAN.clearDisplay();
-  DisplayFAN.setTextSize(1);
-  DisplayFAN.setCursor(0,0);
-  DisplayFAN.print("Mode: ");
-  DisplayFAN.println("Manual");
-  DisplayFAN.setTextSize(2);
-  DisplayFAN.print("Speed:");
-  DisplayFAN.print(round(map(FanLevel,0,255,0,100)));
-  DisplayFAN.println("%");
-  DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
-  DisplayFAN.display(); */
-}
-
-//imposta il display relativo alla visualizzazione del controllo delle ventole in Stop
-void printDisplayFAN_STOP()
-{/* 
-  //static int RectWidth = 0;
-  //RectWidth = map(FanLevel,0,255,0,128);
-
-  DisplayFAN.clearDisplay();
-  DisplayFAN.setTextSize(1);
-  DisplayFAN.setCursor(0,0);
-  DisplayFAN.println("Mode: ");
-  DisplayFAN.setTextSize(2);
-  DisplayFAN.println("STOP");
-  //DisplayFAN.fillRect(0,28,RectWidth,4,WHITE);
-  DisplayFAN.display(); */
-}
