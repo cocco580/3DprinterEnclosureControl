@@ -4,13 +4,14 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
 
-#define TFT_CS   8
-#define TFT_RST  9
-#define TFT_DC   10
-#define TFT_MOSI 11
-#define TFT_SCK  13
+#define TFT_CS   8  //Verde   B1-A1   Viola
+#define TFT_RST  9  //Blu     B2-B2   Blu
+#define TFT_DC   10 //Viola   B3-A3   Verde
+#define TFT_MOSI 11 //Grigio  B4-A4   Giallo
+#define TFT_MISO 12 //Bianco  B5-A5   Marrone
+#define TFT_SCK  13 //Nero    B6-A6   Arancione
 
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCK, TFT_RST);
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCK, TFT_RST, TFT_MISO);
 
 void TFT_StaticLayout(void);
 void TFT_PrintTemperaturePV(int);
@@ -55,6 +56,7 @@ void loop(void) {
 void TFT_StaticLayout()
 {
   //general preset
+  delay(1000);
   tft.begin();
   Serial.println("TFT begin");
   tft.setRotation(3);
