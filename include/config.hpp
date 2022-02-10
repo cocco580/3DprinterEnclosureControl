@@ -5,7 +5,7 @@
 
 
 //dichiarazione costanti
-#define BottonModePin 2 //pin di ingresso del bottone per la selzione del modo delle ventole
+#define ButtonModePin 2 //pin di ingresso del bottone per la selzione del modo delle ventole
 #define FanInCtrlPin 5 //pin di uscita PWM per controllo velocità ventola in immisione d'aria
 #define FanOutCtrlPin 6 //pin di uscita PWM per controllo velocità ventola in estrazione d'aria
 #define AlarmPin 7 //pin di uscita rele per l'interruzione dell'alimentazione
@@ -37,7 +37,7 @@ float kiFactor = 0.5F; //fattore integrativo del controllo
 int SmokePV = 0; //Process Value di presenza fumo
 int SmokeUpperLimit = 10000; //Soglia di allarme presenza fumo
 int FanCtrlValue = 0; //per uscita PWM
-bool BottonMode = true; //bottone selezione modo ventole
+bool ButtonMode = true; //bottone selezione modo ventole
 bool Alarm = false; //stato di allarme grave
 static unsigned long PreviousPIDTime = 0; //timestamp per creare un evento periodico necessario al PID
 
@@ -56,7 +56,7 @@ int controlIntegrator(float, float, float);
 void settingProcedure(void);
 void EEPROMWriteFloat(int, float);
 float EEPROMReadFloat(int);
-bool risingDetect(bool);
+void ISRbuttomMode(void);
 //void add_serial_commands(void);
 //void unrecognized(const char *command);
 //void setKI(void);
@@ -64,10 +64,12 @@ bool risingDetect(bool);
 //void setSK(void);
 //void getSK(void);
 
+/*
 void beginDisplayPV(void);
 void printDisplayPV(float, float, int, float, float, float, float);
 void beginDisplayFAN(void);
 void printDisplayFAN_AUTO(float, int);
 void printDisplayFAN_MAN(int);
 void printDisplayFAN_STOP(void);
+*/
 #endif
