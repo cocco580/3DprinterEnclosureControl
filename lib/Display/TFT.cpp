@@ -6,10 +6,8 @@ void TFT_StaticLayout()
 {
   //general preset
   tft.begin();
-  Serial.println("TFT begin");
   tft.setRotation(3);
   tft.fillScreen(ILI9341_BLACK);
-  Serial.println("TFT preset");
   //process value title
   tft.setCursor(2, 1);
   tft.setTextColor(ILI9341_WHITE);
@@ -184,7 +182,7 @@ void TFT_PrintEnergy(int energy)
 
 void TFT_PrintMode(int mode)
 {
-  static int mode_previus = 0;
+  static int mode_previus = -1;
   if (mode == mode_previus)
   {
     return;
@@ -195,10 +193,13 @@ void TFT_PrintMode(int mode)
   tft.setTextColor(ILI9341_WHITE);
   switch (mode)
   {
-  case 0:
+  case HMI_STOP:
+    tft.print("Stop");
+    break;
+  case HMI_AUTO:
     tft.print("Auto");
     break;
-  case 1:
+  case HMI_MANUAL:
     tft.print("Manual");
     break;
   default:
@@ -209,7 +210,7 @@ void TFT_PrintMode(int mode)
 
 void TFT_PrintSetpoitTemperature(int temperature)
 {
-  static int temperature_previus = 0;
+  static int temperature_previus = -1;
   if (temperature == temperature_previus)
   {
     return;
@@ -225,7 +226,7 @@ void TFT_PrintSetpoitTemperature(int temperature)
 
 void TFT_PrintSetpoitPercentage(int percentage)
 {
-  static int percentage_previus = 0;
+  static int percentage_previus = -1;
   if (percentage == percentage_previus)
   {
     return;
@@ -241,7 +242,7 @@ void TFT_PrintSetpoitPercentage(int percentage)
 
 void TFT_PrintFANbar(int FANpower)
 {
-  static int FANpower_previus = 0;
+  static int FANpower_previus = -1;
   FANpower = map(FANpower, 0, 255, 0 ,320); //scalatura del valore con la larghezza del display
 
   if (FANpower == FANpower_previus)

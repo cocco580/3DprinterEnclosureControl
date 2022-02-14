@@ -15,11 +15,14 @@ Adafruit_BME280 bme;
 
 
 void setup() {
+  //noInterrupts();
   //inizializzazione porta seriale
   Serial.begin(115200);
 
   //avvio del display
+  delay(2000);
   TFT_StaticLayout();
+  Serial.println("TFT start");
 
   // Setup callbacks for SerialCommand commands
   //add_serial_commands();
@@ -27,21 +30,20 @@ void setup() {
   
   //inizializzaione BME280
   bme.begin(0x76);
+  Serial.println("BME start");
 
   //setup analog input
-  pinMode(PotSPPin, INPUT);
-  pinMode(VacPVPin, INPUT);
-  pinMode(AacPVPin, INPUT);
+  pinMode(POT_PIN, INPUT);
+  pinMode(AC_VOLTAGE_PIN, INPUT);
+  pinMode(AC_CURRENT_PIN, INPUT);
   //setup digital input
-  pinMode(ButtonModePin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(ButtonModePin), ISR, RISING);
+  pinMode(BUTTON_MODE_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_MODE_PIN), ISRbuttomMode, FALLING);
   //setup digital output
-  pinMode(FanInCtrlPin, OUTPUT);
-  analogWrite(FanInCtrlPin,0);
-  pinMode(FanOutCtrlPin, OUTPUT);
-  analogWrite(FanOutCtrlPin,0);
-  pinMode(AlarmPin, OUTPUT);
-  digitalWrite(AlarmPin,HIGH);
+  pinMode(FAN_IN_CTRL_PIN, OUTPUT); analogWrite(FAN_IN_CTRL_PIN,0);
+  pinMode(FAN_OUT_CTRL_PIN, OUTPUT); analogWrite(FAN_OUT_CTRL_PIN,0);
+  pinMode(ALARM_PIN, OUTPUT);
+  digitalWrite(ALARM_PIN,HIGH);
 
   //recupero parametri di processo precedentemente impostati e scritti sulla EEPROM
   EEPROM.get(0, kiFactor);
@@ -51,13 +53,21 @@ void setup() {
   Serial.println("Setup completato");
   Status = AUTOMATICO;
   Serial.println("Stato macchina: Automatico");
+  //interrupts();
 }
 
 void loop() {
 
   //Serial_cmd.readSerial();
-  getPV(); //raccolta dati dal campo
-  printDisplayPV(TempPV, HumidityPV, SmokePV, VacPV, AacPV, ACinstantPWR, ACenergy); //print del display dei valori di processo
+
+  //Raccolta dati dal campo
+  getPV();
+  //Scrittura dati sul display
+  TFT_PrintTemperaturePV((int) round(TempPV));
+  TFT_PrintHumidityPV((int) round(HumidityPV));
+  TFT_PrintSmoke((int) round(SmokePV));
+  
+  //Allarmi
   Alarm = (SmokePV < SmokeUpperLimit) ? false : true; //dà l'allarme se il sensore rilevamento fumo supera la soglia
   alarmSequence(Alarm);
 
@@ -65,12 +75,13 @@ void loop() {
   switch (Status)
   {
   case AUTOMATICO:
+    TempSP = map(PotSPValue,0,1023,20,60);
     if ( (millis() - PreviousPIDTime) >= PID_PERIOD)
     {
       FanCtrlValue = controlIntegrator(TempSP, TempPV, kiFactor*(-1)); //ki negativo = raffreddamento
-      analogWrite(FanInCtrlPin, FanCtrlValue);
-      analogWrite(FanOutCtrlPin, FanCtrlValue);
-      Serial.print("PV: ");
+      analogWrite(FAN_IN_CTRL_PIN, FanCtrlValue);
+      analogWrite(FAN_OUT_CTRL_PIN, FanCtrlValue);
+      Serial.print("PID = PV: ");
       Serial.print(TempPV,1);
       Serial.print(" | SP: ");
       Serial.print(TempSP,1);
@@ -78,7 +89,9 @@ void loop() {
       Serial.println(FanCtrlValue);
       PreviousPIDTime = millis();
     }
-    printDisplayFAN_AUTO(TempSP, FanCtrlValue); //print del display ventole in automatico
+    TFT_PrintMode(HMI_AUTO);
+    TFT_PrintSetpoitTemperature((int) round(TempSP));
+    TFT_PrintFANbar(FanCtrlValue);
     break;
 
   case MANUALE:
@@ -86,20 +99,25 @@ void loop() {
     FanCtrlValue = map(PotSPValue,0,1023,0,255);
     if (FanCtrlValue != previus_FanCtrlValue) // eseguo solo se il valore cambia
     {
-      analogWrite(FanInCtrlPin, FanCtrlValue);
-      analogWrite(FanOutCtrlPin, FanCtrlValue);
-      printDisplayFAN_MAN(FanCtrlValue);
+      analogWrite(FAN_IN_CTRL_PIN, FanCtrlValue);
+      analogWrite(FAN_OUT_CTRL_PIN, FanCtrlValue);
       previus_FanCtrlValue = FanCtrlValue;
     }
+    TFT_PrintMode(HMI_MANUAL);
+    TFT_PrintSetpoitPercentage(map(PotSPValue,0,1023,0,100));
+    TFT_PrintFANbar(FanCtrlValue);
     break;
 
   case STOP:
     if (FanCtrlValue != 0)
     {
       FanCtrlValue = 0;
-      analogWrite(FanInCtrlPin, FanCtrlValue);
-      analogWrite(FanOutCtrlPin, FanCtrlValue);
+      analogWrite(FAN_IN_CTRL_PIN, FanCtrlValue);
+      analogWrite(FAN_OUT_CTRL_PIN, FanCtrlValue);
     }
+    TFT_PrintMode(HMI_STOP);
+    TFT_PrintSetpoitPercentage(0);
+    TFT_PrintFANbar(0);
     break;
 
   default:
@@ -110,10 +128,10 @@ void loop() {
 //sequenza di avvio e segnalazione allarme
 void alarmSequence(bool StatoAllarme) {
   if (StatoAllarme){
-    digitalWrite(AlarmPin, LOW); //attiva il relè
+    digitalWrite(ALARM_PIN, LOW); //attiva il relè
   }
   else{
-    digitalWrite(AlarmPin, HIGH);
+    digitalWrite(ALARM_PIN, HIGH);
   }
   
 }
@@ -122,6 +140,13 @@ void alarmSequence(bool StatoAllarme) {
 //ISR bottone cambio modo di funzionamneto
 void ISRbuttomMode()
 {
+  noInterrupts();
+  static unsigned long timestamp = 0;
+  if (millis()<(timestamp+BUTTON_DEBOUNCE_TIME))
+  {
+    return;
+  }
+  
   switch (Status)
   {
   case AUTOMATICO:
@@ -139,59 +164,54 @@ void ISRbuttomMode()
   default:
     break;
   }
+  timestamp = millis();
+  interrupts();
 }
 
 //raccolta di tutti i dati provenienti dei sensori di campo
 void getPV() {
   //variabili
-  static unsigned long StopTime = 0;
+  static unsigned long timeStamp = 0;
   static unsigned long PreviusTime = 0;
   
   //da pannello frontale
-  PotSPValue = analogRead(PotSPPin);
-  //ButtonMode = digitalRead(ButtonModePin);
+  PotSPValue = analogRead(POT_PIN);
+  //ButtonMode = digitalRead(BUTTON_MODE_PIN);
   
   //sensori interni alla cabina di stampa
-  TempSP = map(PotSPValue,0,1023,20,60);
   TempPV = bme.readTemperature(); //in gradi celsius
-  PressPV = bme.readPressure() / 100.0F; // in hPa
+  //PressPV = bme.readPressure() / 100.0F; // in hPa
   HumidityPV = bme.readHumidity(); //relativa
-
-  //misura della potenza assorbita
-  VacPV = 0;
-  AacPV = 0;
-  StopTime = millis();
-  while ((millis()-StopTime) < 20 ){ //misura i valori in continuo per 20ms un ciclo intero di sinusoidale
-    VacPV = max(analogRead(VacPVPin),VacPV); //aggiorna la variabile sempre con il valore max trovato
-    AacPV = max(analogRead(AacPVPin),AacPV); //aggiorna la variabile sempre con il valore max trovato
-  }
-  for (int i=0; i<9; i++) { //array shift left
-    VacPVhistory[i] = VacPVhistory[i+1];
-    AacPVhistory[i] = AacPVhistory[i+1];
-  }
-  VacPVhistory[9] = VacPV; //aggiungi ultimo valore raccolto allo storico
-  AacPVhistory[9] = AacPV; //aggiungi ultimo valore raccolto allo storico
-  //valore medio dello storico
-  for (int i=0; i<10; i++){ 
-    VacPV += VacPVhistory[i];
-    AacPV += AacPVhistory[i];
-  }
-  VacPV /= 10;
-  AacPV /= 10;
-  //scalatura a grandenzza fisica
-  VacPV = VacPV * VacPVfactor * RMSfactor; //Volt
-  AacPV = AacPV * AacPVfactor * RMSfactor; //Ampere
-  ACinstantPWR = VacPV * AacPV / 1000; //kW
-  ACenergy += ACinstantPWR * (millis() - PreviusTime)/3600000; //kWh
-  PreviusTime = millis();
-
   //misura fumo
   for (int i = 0; i < 10; i++){
-    SmokePV = analogRead(SmokePVPin);
+    SmokePV = analogRead(SMOKE_PIN);
   }
-  SmokePV = SmokePV /10; //media dei valori letti
+  SmokePV = SmokePV/10; //media dei valori letti
   SmokePV = map(SmokePV,0,1023,100,10000); //trasormazione in ppm
 
+  //misura della potenza assorbita
+	VacPV = 0;
+	AacPV = 0;
+	int pointNumeber = 0;
+	timeStamp = millis();
+	while (millis() < (timeStamp + PWR_LOG_PERIOD) ){ //misura i valori in continuo
+		VacPV += pow(analogRead(AC_VOLTAGE_PIN),2);
+		AacPV += pow(analogRead(AC_CURRENT_PIN),2);
+		pointNumeber++;
+	}
+	VacPV = sqrt((1.0F/(float)pointNumeber)*VacPV);
+	AacPV = sqrt((1.0F/(float)pointNumeber)*AacPV);
+  //scalatura a grandenzza fisica ------TO DO---------
+  VacPV = VacPV; //Volt
+  AacPV = AacPV; //Ampere
+  ACinstantPWR = 100; //W
+  ACenergy = 1000; //Wh
+  PreviusTime = millis();
+
+
+//prosciutto e funghi
+//salsicia e procini
+//guzzi
 }
 
 //sistema di controllo base PID con solo la parte integrativa

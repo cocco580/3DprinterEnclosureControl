@@ -12,8 +12,11 @@
 #define TFT_DC   10
 #define TFT_MOSI 11
 #define TFT_SCK  13
+#define HMI_STOP 0
+#define HMI_AUTO 1
+#define HMI_MANUAL 2
 
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCK, TFT_RST);
+static Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCK, TFT_RST);
 
 void TFT_StaticLayout(void);
 void TFT_PrintTemperaturePV(int);
