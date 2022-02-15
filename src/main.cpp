@@ -7,10 +7,15 @@
 //#include <SerialCommand.h>
 #include "config.hpp"
 #include "TFT.hpp"
+#include <movingAvg.h>
 
 
 //dichiarazione oggetti
 Adafruit_BME280 bme;
+movingAvg smokeSmooth(30);
+movingAvg ACvoltageSmooth(30);
+movingAvg ACcurrentSmooth(30);
+movingAvg ACpowerSmooth(30);
 //SerialCommand Serial_cmd;
 
 
@@ -31,6 +36,12 @@ void setup() {
   //inizializzaione BME280
   bme.begin(0x76);
   Serial.println("BME start");
+
+  //inizializzaione media mobile
+  smokeSmooth.begin();
+  ACvoltageSmooth.begin();
+  ACcurrentSmooth.begin();
+  ACpowerSmooth.begin();
 
   //setup analog input
   pinMode(POT_PIN, INPUT);
@@ -53,6 +64,7 @@ void setup() {
   Serial.println("Setup completato");
   Status = AUTOMATICO;
   Serial.println("Stato macchina: Automatico");
+  TFT_PrintFANbar(0);
   //interrupts();
 }
 
@@ -62,10 +74,18 @@ void loop() {
 
   //Raccolta dati dal campo
   getPV();
+  smokeSmooth.reading(SmokePV);
+  ACvoltageSmooth.reading(VacPV);
+  ACcurrentSmooth.reading(AacPV*10);
+  ACpowerSmooth.reading(ACinstantPWR);
   //Scrittura dati sul display
   TFT_PrintTemperaturePV((int) round(TempPV));
   TFT_PrintHumidityPV((int) round(HumidityPV));
-  TFT_PrintSmoke((int) round(SmokePV));
+  TFT_PrintSmoke(smokeSmooth.getAvg());
+  TFT_PrintVoltage(ACvoltageSmooth.getAvg());
+  TFT_PrintCurrent(ACcurrentSmooth.getAvg());
+  TFT_PrintPower(ACpowerSmooth.getAvg());
+  TFT_PrintEnergy(round(ACenergy));
   
   //Allarmi
   Alarm = (SmokePV < SmokeUpperLimit) ? false : true; //dà l'allarme se il sensore rilevamento fumo supera la soglia
@@ -171,8 +191,8 @@ void ISRbuttomMode()
 //raccolta di tutti i dati provenienti dei sensori di campo
 void getPV() {
   //variabili
-  static unsigned long timeStamp = 0;
-  static unsigned long PreviusTime = 0;
+	static unsigned long timeStamp = 0;
+	static unsigned long deltaT = 0;
   
   //da pannello frontale
   PotSPValue = analogRead(POT_PIN);
@@ -192,26 +212,20 @@ void getPV() {
   //misura della potenza assorbita
 	VacPV = 0;
 	AacPV = 0;
-	int pointNumeber = 0;
+	powerPointNumeber = 0;
+	deltaT = millis() - timeStamp;
 	timeStamp = millis();
 	while (millis() < (timeStamp + PWR_LOG_PERIOD) ){ //misura i valori in continuo
-		VacPV += pow(analogRead(AC_VOLTAGE_PIN),2);
-		AacPV += pow(analogRead(AC_CURRENT_PIN),2);
-		pointNumeber++;
+		VacPV += pow(analogRead(AC_VOLTAGE_PIN)+AC_VOLTAGE_AC_COUPLING,2);
+		AacPV += pow(analogRead(AC_CURRENT_PIN)+AC_CURRENT_AC_COUPLING,2);
+		powerPointNumeber++;
 	}
-	VacPV = sqrt((1.0F/(float)pointNumeber)*VacPV);
-	AacPV = sqrt((1.0F/(float)pointNumeber)*AacPV);
-  //scalatura a grandenzza fisica ------TO DO---------
-  VacPV = VacPV; //Volt
-  AacPV = AacPV; //Ampere
-  ACinstantPWR = 100; //W
-  ACenergy = 1000; //Wh
-  PreviusTime = millis();
-
-
-//prosciutto e funghi
-//salsicia e procini
-//guzzi
+	VacPV = sqrt((1.0F/(float)powerPointNumeber)*VacPV);
+	AacPV = sqrt((1.0F/(float)powerPointNumeber)*AacPV);
+	VacPV = VacPV * AC_VOLTAGE_FACTOR + AC_VOLTAGE_OFFSET; //Vrms
+	AacPV = AacPV * AC_CURRENT_FACTOR + AC_CURRENT_OFFSET; //Arms
+	ACinstantPWR = VacPV * AacPV; //W
+	ACenergy += ACinstantPWR * (float)deltaT/3600000.0F; //Wh
 }
 
 //sistema di controllo base PID con solo la parte integrativa

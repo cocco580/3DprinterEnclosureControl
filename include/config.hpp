@@ -18,6 +18,7 @@
 #define AC_VOLTAGE_OFFSET 18.8F
 #define AC_CURRENT_FACTOR 0.008057554F
 #define AC_CURRENT_OFFSET 0.003022F
+#define PWR_LOG_PERIOD 40
 #define SMOKE_PIN A3 //Pin del sengnale del sensore fumo
 #define PWR_LOG_PERIOD 40 // Tempo di misura di tensione e corrente in millisecondi
 #define PID_PERIOD 2000UL // periodo di aggiornamento del PID in millisecondi
@@ -27,8 +28,7 @@
 int PotSPValue = 0; // valore del potenziometro per il controllo del Set Point di temperatura
 float VacPV = 0; //valore della misura della tensione AC
 float AacPV = 0; //valore della misura della corrente AC
-int VacPVhistory[10] = {0,0,0,0,0,0,0,0,0,0};
-int AacPVhistory[10] = {0,0,0,0,0,0,0,0,0,0};
+int powerPointNumeber = 0; //Contatore del numero di campionamenti fatti dal ciclo di misura di tensione e corrente
 float ACinstantPWR = 0; //potenza istantanea AC
 float ACenergy = 0; //energia asorbita AC
 float TempSP = 20; //Set Point di temperatura

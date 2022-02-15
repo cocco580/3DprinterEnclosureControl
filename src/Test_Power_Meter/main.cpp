@@ -1,12 +1,12 @@
 
 
 #include <Arduino.h>
-#include <TrueRMS.h>
+#include <movingAvg.h>
 #include "config.hpp"
 
-#define PWRLOGPERIOD 40    // loop period time in us. In this case 2.0ms
+   // loop period time in us. In this case 2.0ms
 
-int pointNumeber = 0;
+
 
 void setup() 
 {
@@ -21,16 +21,16 @@ void loop()
 	static unsigned long deltaT = 0;
 	VacPV = 0;
 	AacPV = 0;
-	pointNumeber = 0;
+	powerPointNumeber = 0;
 	deltaT = millis() - timeStamp;
 	timeStamp = millis();
-	while (millis() < (timeStamp + PWRLOGPERIOD) ){ //misura i valori in continuo per 20ms un ciclo intero di sinusoidale
+	while (millis() < (timeStamp + PWR_LOG_PERIOD) ){ //misura i valori in continuo
 		VacPV += pow(analogRead(AC_VOLTAGE_PIN)+AC_VOLTAGE_AC_COUPLING,2);
 		AacPV += pow(analogRead(AC_CURRENT_PIN)+AC_CURRENT_AC_COUPLING,2);
-		pointNumeber++;
+		powerPointNumeber++;
 	}
-	VacPV = sqrt((1.0F/(float)pointNumeber)*VacPV);
-	AacPV = sqrt((1.0F/(float)pointNumeber)*AacPV);
+	VacPV = sqrt((1.0F/(float)powerPointNumeber)*VacPV);
+	AacPV = sqrt((1.0F/(float)powerPointNumeber)*AacPV);
 	VacPV = VacPV * AC_VOLTAGE_FACTOR + AC_VOLTAGE_OFFSET; //Vrms
 	AacPV = AacPV * AC_CURRENT_FACTOR + AC_CURRENT_OFFSET; //Arms
 	ACinstantPWR = VacPV * AacPV; //W
@@ -41,7 +41,7 @@ void loop()
 	Serial.print("V | ");
 	Serial.print(AacPV,2);
 	Serial.print("A | ");
-	Serial.print(pointNumeber);
+	Serial.print(powerPointNumeber);
 	Serial.print("# | ");
 	Serial.print(ACinstantPWR,0);
 	Serial.print("W | ");
